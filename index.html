@@ -168,13 +168,15 @@ if (hash.get("access_token")) {
   store.set("lsw.token", hash.get("access_token"));
   history.replaceState(null, "", location.pathname + location.search);
 }
-let clientId = store.get("lsw.clientId", "");
+const BUILT_IN_CLIENT_ID = "kqvjtxd4xzzyrq47dscyghwc5gsh0c";
+let clientId = BUILT_IN_CLIENT_ID || store.get("lsw.clientId", "");
 let token = store.get("lsw.token", "");
 $("#clientId").value = clientId;
+if (BUILT_IN_CLIENT_ID) $("#clientId").hidden = true;
 const redirect = location.origin + location.pathname;
 
 $("#connect").onclick = () => {
-  clientId = $("#clientId").value.trim();
+  clientId = BUILT_IN_CLIENT_ID || $("#clientId").value.trim();
   if (!clientId) { $("#authNote").textContent = "Paste your Client ID first."; return; }
   store.set("lsw.clientId", clientId);
   const u = new URL("https://id.twitch.tv/oauth2/authorize");
@@ -183,10 +185,10 @@ $("#connect").onclick = () => {
 };
 function setAuthUI(){
   if (token && clientId) {
-    $("#authNote").textContent = "Connected. Redirect URL in use: " + redirect;
+    $("#authNote").textContent = "Connected to Twitch.";
     $("#connect").textContent = "Reconnect";
   } else {
-    $("#authNote").textContent = "Needed to list live NoPixel streams. Set your app's redirect URL to " + redirect;
+    $("#authNote").textContent = "Sign in with Twitch to list live NoPixel streams. Adding a channel by name works without it.";
   }
 }
 setAuthUI();
