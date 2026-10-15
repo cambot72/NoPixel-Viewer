@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Los Santos Wall</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: fixed left rail of live POVs, free-form snap-grid canvas of draggable players to the right */
+:root{
+  --bg:#0c0e14;
+  --rail:#12151e;
+  --tile:#171b26;
+  --line:#262b3a;
+  --fg:#e7e9f0;
+  --dim:#8a90a3;
+  --accent:#f2b134;      /* lightbar amber */
+  --live:#e5484d;
+  --display:"Barlow Condensed","Arial Narrow",sans-serif;
+  --body:"IBM Plex Sans",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,monospace;
+  --g0:#e5484d;--g1:#3e8ef7;--g2:#f2b134;--g3:#30a46c;--g4:#a970ff;--g5:#8a90a3;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font:14px/1.45 var(--body);display:flex;overflow:hidden}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* Rail */
+#rail{width:300px;flex:none;background:var(--rail);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+#rail.hide{display:none}
+.brand{padding:14px 16px 10px;border-bottom:1px solid var(--line)}
+.brand h1{margin:0;font:700 26px/1 var(--display);letter-spacing:.04em;text-transform:uppercase}
+.brand h1 span{color:var(--accent)}
+.brand p{margin:4px 0 0;color:var(--dim);font-size:12px}
+.sect{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+.lbl{font:600 11px var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.row{display:flex;gap:6px}
+input[type=text]{flex:1;min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:6px 8px}
+.btn{background:var(--tile);border:1px solid var(--line);border-radius:4px;padding:6px 10px;white-space:nowrap}
+.btn:hover{border-color:var(--dim)}
+.btn.primary{background:var(--accent);color:#1a1405;border-color:var(--accent);font-weight:600}
+.note{font-size:12px;color:var(--dim);margin:0}
+#list{flex:1;overflow-y:auto;min-height:0}
+.item{display:grid;grid-template-columns:88px 1fr;gap:10px;padding:8px 16px;border-bottom:1px solid var(--line);cursor:pointer;background:none;border-left:0;border-right:0;border-top:0;text-align:left;width:100%}
+.item:hover{background:var(--tile)}
+.item.on{box-shadow:inset 3px 0 0 var(--accent)}
+.item img{width:88px;height:50px;object-fit:cover;border-radius:3px;background:var(--tile)}
+.item .n{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .t{font-size:12px;color:var(--dim);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.item .v{font:500 11px var(--mono);color:var(--live);font-variant-numeric:tabular-nums}
+.empty{padding:20px 16px;color:var(--dim);font-size:13px}
+
+/* Toolbar */
+#main{flex:1;display:flex;flex-direction:column;min-width:0}
+#bar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--rail);flex-wrap:wrap}
+#bar .sp{flex:1}
+.seg{display:flex;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.seg button{background:none;border:0;padding:5px 10px;color:var(--dim)}
+.seg button.on{background:var(--tile);color:var(--fg)}
+#unlock{font-size:12px;color:var(--accent)}
+
+/* Canvas */
+#wall{flex:1;position:relative;overflow:auto;
+  background-image:radial-gradient(var(--line) 1px,transparent 1px);background-size:20px 20px}
+.tile{position:absolute;background:var(--tile);border:1px solid var(--line);border-radius:6px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 6px 20px rgba(0,0,0,.35)}
+.tile.loud{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 6px 20px rgba(0,0,0,.35)}
+.hd{height:28px;flex:none;display:flex;align-items:center;gap:8px;padding:0 6px 0 10px;cursor:grab;user-select:none;border-top:3px solid var(--gc,var(--g5))}
+.hd:active{cursor:grabbing}
+.hd .nm{font:700 15px var(--display);letter-spacing:.03em;text-transform:uppercase;flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.ic{background:none;border:0;padding:2px 5px;color:var(--dim);border-radius:3px;font-size:13px;line-height:1}
+.ic:hover{color:var(--fg);background:var(--line)}
+.ic.pinned{color:var(--accent)}
+.dot{width:12px;height:12px;border-radius:50%;background:var(--gc,var(--g5));border:0;padding:0}
+.pl{flex:1;position:relative;background:#000}
+.pl iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.rz{position:absolute;right:0;bottom:0;width:16px;height:16px;cursor:nwse-resize;
+  background:linear-gradient(135deg,transparent 50%,var(--dim) 50%,var(--dim) 60%,transparent 60%,transparent 75%,var(--dim) 75%,var(--dim) 85%,transparent 85%)}
+body.drag .pl iframe{pointer-events:none}
+body.drag{user-select:none}
+#hint{position:absolute;inset:0;display:grid;place-items:center;color:var(--dim);text-align:center;pointer-events:none;padding:16px}
+#hint b{display:block;font:700 30px var(--display);text-transform:uppercase;color:var(--fg);letter-spacing:.04em}
+</style>
+</head>
+<body>
+
+<aside id="rail">
+  <div class="brand">
+    <h1>Los Santos <span>Wall</span></h1>
+    <p>Live NoPixel V POVs, side by side</p>
+  </div>
+
+  <div class="sect" id="authSect">
+    <span class="lbl">Twitch connection</span>
+    <div class="row">
+      <input type="text" id="clientId" placeholder="Twitch app Client ID" autocomplete="off">
+      <button class="btn primary" id="connect">Connect</button>
+    </div>
+    <p class="note" id="authNote">Needed to list live NoPixel streams. Adding a channel by name works without it.</p>
+  </div>
+
+  <div class="sect">
+    <span class="lbl">Add channel</span>
+    <form class="row" id="addForm">
+      <input type="text" id="addName" placeholder="e.g. buddha" autocomplete="off">
+      <button class="btn">Add</button>
+    </form>
+  </div>
+
+  <div class="sect">
+    <div class="row" style="align-items:center">
+      <span class="lbl" style="flex:1">Live on NoPixel <span id="count"></span></span>
+      <button class="btn" id="refresh">Refresh</button>
+    </div>
+    <input type="text" id="filter" placeholder="Filter by name, character, crew" autocomplete="off">
+  </div>
+
+  <div id="list"><div class="empty">Connect Twitch to see who is live.</div></div>
+</aside>
+
+<main id="main">
+  <div id="bar">
+    <button class="btn" id="toggleRail">☰ Streams</button>
+    <div class="seg" role="group" aria-label="Audio mode">
+      <button id="mHover" class="on">Hover audio</button>
+      <button id="mPin">Pinned audio</button>
+    </div>
+    <button class="btn" id="tile">Tile all</button>
+    <button class="btn" id="byGroup">Arrange by group</button>
+    <span id="unlock">Click anywhere once to enable audio</span>
+    <span class="sp"></span>
+    <button class="btn" id="clear">Clear wall</button>
+  </div>
+  <div id="wall">
+    <div id="hint"><div><b>No POVs yet</b>Pick streams from the left rail. Drag tiles by their header, resize from the corner, click the dot to color-group them.</div></div>
+  </div>
+</main>
+
+<script src="https://player.twitch.tv/js/embed/v1.js"></script>
+<script>
+(() => {
+const GTA_V_ID = "32982";
+const TITLE_RE = /no\s?pixel|\bnp\s?(v|5|5\.0)?\b|\[np|npv\b/i;
+const SNAP = 20, HEAD = 28, MIN_W = 400, MIN_H = 300 + HEAD; // Twitch requires 400x300 minimum player
+const GROUPS = 6;
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch{ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} }
+};
+const $ = s => document.querySelector(s);
+const wall = $("#wall");
+const host = location.hostname || "localhost";
+
+let tiles = new Map();          // channel -> {el, player, state}
+let mode = store.get("lsw.mode", "hover");
+let pinned = null;
+let unlocked = false;
+let z = 10;
+let live = [];
+
+/* ---------- auth (implicit grant, token lives in the URL hash on return) ---------- */
+const hash = new URLSearchParams(location.hash.slice(1));
+if (hash.get("access_token")) {
+  store.set("lsw.token", hash.get("access_token"));
+  history.replaceState(null, "", location.pathname + location.search);
+}
+let clientId = store.get("lsw.clientId", "");
+let token = store.get("lsw.token", "");
+$("#clientId").value = clientId;
+const redirect = location.origin + location.pathname;
+
+$("#connect").onclick = () => {
+  clientId = $("#clientId").value.trim();
+  if (!clientId) { $("#authNote").textContent = "Paste your Client ID first."; return; }
+  store.set("lsw.clientId", clientId);
+  const u = new URL("https://id.twitch.tv/oauth2/authorize");
+  u.search = new URLSearchParams({ response_type:"token", client_id:clientId, redirect_uri:redirect, scope:"" });
+  location.href = u.toString();
+};
+function setAuthUI(){
+  if (token && clientId) {
+    $("#authNote").textContent = "Connected. Redirect URL in use: " + redirect;
+    $("#connect").textContent = "Reconnect";
+  } else {
+    $("#authNote").textContent = "Needed to list live NoPixel streams. Set your app's redirect URL to " + redirect;
+  }
+}
+setAuthUI();
+
+async function helix(path){
+  const r = await fetch("https://api.twitch.tv/helix/" + path, { headers:{ "Client-Id":clientId, "Authorization":"Bearer " + token }});
+  if (r.status === 401) { token = ""; store.set("lsw.token", ""); setAuthUI(); throw new Error("Twitch sign-in expired. Click Reconnect."); }
+  if (!r.ok) throw new Error("Twitch returned " + r.status);
+  return r.json();
+}
+
+/* ---------- live list ---------- */
+async function loadLive(){
+  if (!token || !clientId) return;
+  $("#list").innerHTML = '<div class="empty">Loading live streams…</div>';
+  try {
+    const out = new Map();
+    // A dedicated NoPixel V category, if Twitch has one: take everything in it.
+    try {
+      const g = await helix("games?name=" + encodeURIComponent("NoPixel V"));
+      if (g.data?.length) await pull(g.data[0].id, out, false);
+    } catch {}
+    // GTA V category: keep only streams whose title says NoPixel.
+    await pull(GTA_V_ID, out, true);
+    live = [...out.values()].sort((a,b) => b.viewer_count - a.viewer_count);
+    renderList();
+  } catch(e) {
+    $("#list").innerHTML = '<div class="empty">' + e.message + '</div>';
+  }
+}
+async function pull(gameId, out, filterTitle){
+  let after = "";
+  for (let i = 0; i < 15; i++) {           // up to 1,500 streams, sorted by viewers
+    const d = await helix("streams?first=100&game_id=" + gameId + (after ? "&after=" + after : ""));
+    for (const s of d.data) if (!filterTitle || TITLE_RE.test(s.title)) out.set(s.user_login, s);
+    after = d.pagination?.cursor;
+    if (!after || d.data.length < 100 || d.data[d.data.length-1].viewer_count < 3) break;
+  }
+}
+function renderList(){
+  const q = $("#filter").value.trim().toLowerCase();
+  const rows = live.filter(s => !q || (s.user_name + " " + s.title).toLowerCase().includes(q));
+  $("#count").textContent = live.length ? "· " + live.length : "";
+  if (!rows.length) { $("#list").innerHTML = '<div class="empty">' + (live.length ? "No matches." : "Nobody matching NoPixel is live right now.") + '</div>'; return; }
+  $("#list").innerHTML = "";
+  for (const s of rows) {
+    const b = document.createElement("button");
+    b.className = "item" + (tiles.has(s.user_login) ? " on" : "");
+    b.innerHTML = `<img alt="" loading="lazy" src="${s.thumbnail_url.replace("{width}","176").replace("{height}","100")}">
+      <div style="min-width:0"><div class="n"></div><div class="t"></div><div class="v">● ${s.viewer_count.toLocaleString()}</div></div>`;
+    b.querySelector(".n").textContent = s.user_name;
+    b.querySelector(".t").textContent = s.title;
+    b.onclick = () => tiles.has(s.user_login) ? removeTile(s.user_login) : addTile(s.user_login, s.user_name);
+    $("#list").appendChild(b);
+  }
+}
+$("#filter").oninput = renderList;
+$("#refresh").onclick = loadLive;
+setInterval(loadLive, 120000);
+
+/* ---------- tiles ---------- */
+const snap = v => Math.round(v / SNAP) * SNAP;
+function nextSlot(){
+  const w = 480, h = 270 + HEAD + 2, cols = Math.max(1, Math.floor((wall.clientWidth - SNAP) / (w + SNAP)));
+  const i = tiles.size;
+  return { x: SNAP + (i % cols) * (w + SNAP), y: SNAP + Math.floor(i / cols) * (h + SNAP), w, h, g: GROUPS - 1 };
+}
+function addTile(login, display, state){
+  login = login.toLowerCase();
+  if (tiles.has(login)) return;
+  state = state || nextSlot();
+  const el = document.createElement("div");
+  el.className = "tile";
+  el.innerHTML = `<div class="hd">
+      <button class="dot" title="Change group color" aria-label="Change group color"></button>
+      <span class="nm"></span>
+      <button class="ic pin" title="Pin audio to this POV" aria-label="Pin audio">🔈</button>
+      <a class="ic" title="Open on Twitch" target="_blank" rel="noopener" href="https://twitch.tv/${login}">↗</a>
+      <button class="ic x" title="Remove" aria-label="Remove">✕</button>
+    </div><div class="pl" id="p-${login}"></div><div class="rz"></div>`;
+  el.querySelector(".nm").textContent = display || login;
+  wall.appendChild(el);
+  const t = { el, player:null, state:{...state, name: display || login} };
+  tiles.set(login, t);
+  place(t); setGroup(t, state.g);
+
+  t.player = new Twitch.Player("p-" + login, { channel:login, width:"100%", height:"100%", parent:[host], muted:true, autoplay:true });
+  t.player.addEventListener(Twitch.Player.READY, () => { t.player.setMuted(true); applyAudio(); });
+
+  el.addEventListener("mouseenter", () => { if (mode === "hover") setLoud(login); });
+  el.addEventListener("mouseleave", () => { if (mode === "hover") setLoud(null); });
+  el.addEventListener("pointerdown", () => { el.style.zIndex = ++z; }, true);
+  el.querySelector(".x").onclick = () => removeTile(login);
+  el.querySelector(".dot").onclick = () => { setGroup(t, (t.state.g + 1) % GROUPS); save(); };
+  el.querySelector(".pin").onclick = () => {
+    pinned = pinned === login ? null : login;
+    if (pinned) setMode("pin");
+    applyAudio();
+  };
+  dragify(t, el.querySelector(".hd"), "move");
+  dragify(t, el.querySelector(".rz"), "size");
+  $("#hint").hidden = true;
+  save(); renderList();
+}
+function removeTile(login){
+  const t = tiles.get(login); if (!t) return;
+  t.el.remove(); tiles.delete(login);
+  if (pinned === login) pinned = null;
+  $("#hint").hidden = tiles.size > 0;
+  save(); renderList();
+}
+function place(t){ const s = t.state, st = t.el.style; st.left = s.x+"px"; st.top = s.y+"px"; st.width = s.w+"px"; st.height = s.h+"px"; }
+function setGroup(t, g){ t.state.g = g; t.el.style.setProperty("--gc", `var(--g${g})`); }
+
+function dragify(t, handle, kind){
+  handle.addEventListener("pointerdown", e => {
+    if (e.button !== 0 || e.target.closest("button,a") && kind === "move") return;
+    e.preventDefault();
+    handle.setPointerCapture(e.pointerId);
+    document.body.classList.add("drag");
+    const sx = e.clientX, sy = e.clientY, o = {...t.state};
+    const mv = ev => {
+      const dx = ev.clientX - sx, dy = ev.clientY - sy;
+      if (kind === "move") { t.state.x = Math.max(0, snap(o.x + dx)); t.state.y = Math.max(0, snap(o.y + dy)); }
+      else { t.state.w = Math.max(MIN_W, snap(o.w + dx)); t.state.h = Math.max(MIN_H, snap(o.h + dy)); }
+      place(t);
+    };
+    const up = () => { handle.removeEventListener("pointermove", mv); document.body.classList.remove("drag"); save(); };
+    handle.addEventListener("pointermove", mv);
+    handle.addEventListener("pointerup", up, { once:true });
+    handle.addEventListener("pointercancel", up, { once:true });
+  });
+}
+
+/* ---------- audio ---------- */
+let loud = null;
+function setLoud(login){ loud = login; applyAudio(); }
+function applyAudio(){
+  const target = mode === "pin" ? pinned : loud;
+  for (const [login, t] of tiles) {
+    const on = unlocked && login === target;
+    try { t.player?.setMuted(!on); if (on) t.player.setVolume(1); } catch {}
+    t.el.classList.toggle("loud", login === target);
+    const p = t.el.querySelector(".pin");
+    p.classList.toggle("pinned", login === pinned);
+    p.textContent = login === pinned ? "🔊" : "🔈";
+  }
+}
+function setMode(m){
+  mode = m; store.set("lsw.mode", m);
+  $("#mHover").classList.toggle("on", m === "hover");
+  $("#mPin").classList.toggle("on", m === "pin");
+  applyAudio();
+}
+$("#mHover").onclick = () => setMode("hover");
+$("#mPin").onclick = () => setMode("pin");
+document.addEventListener("pointerdown", () => {
+  if (unlocked) return;
+  unlocked = true; $("#unlock").hidden = true; applyAudio();
+}, { capture:true });
+
+/* ---------- layout tools ---------- */
+function autoTile(order){
+  const list = order || [...tiles.values()];
+  if (!list.length) return;
+  const W = wall.clientWidth - SNAP;
+  const cols = Math.max(1, Math.min(list.length, Math.floor(W / (MIN_W + SNAP)), Math.ceil(Math.sqrt(list.length))));
+  const w = Math.max(MIN_W, snap((W / cols) - SNAP));
+  const h = Math.max(MIN_H, snap(w * 9 / 16 + HEAD));
+  list.forEach((t, i) => {
+    Object.assign(t.state, { x: SNAP + (i % cols) * (w + SNAP), y: SNAP + Math.floor(i / cols) * (h + SNAP), w, h });
+    place(t);
+  });
+  save();
+}
+$("#tile").onclick = () => autoTile();
+$("#byGroup").onclick = () => autoTile([...tiles.values()].sort((a,b) => a.state.g - b.state.g || a.state.x - b.state.x || a.state.y - b.state.y));
+$("#clear").onclick = () => { for (const k of [...tiles.keys()]) removeTile(k); };
+$("#toggleRail").onclick = () => { $("#rail").classList.toggle("hide"); store.set("lsw.rail", $("#rail").classList.contains("hide")); };
+if (store.get("lsw.rail", false)) $("#rail").classList.add("hide");
+
+$("#addForm").onsubmit = e => {
+  e.preventDefault();
+  const n = $("#addName").value.trim().replace(/^.*twitch\.tv\//i, "").replace(/\/.*$/, "");
+  if (n) addTile(n, n);
+  $("#addName").value = "";
+};
+
+/* ---------- persistence ---------- */
+function save(){
+  const out = {};
+  for (const [k, t] of tiles) out[k] = t.state;
+  store.set("lsw.tiles", out);
+}
+const saved = store.get("lsw.tiles", {});
+for (const [k, s] of Object.entries(saved)) addTile(k, s.name, s);
+setMode(mode);
+loadLive();
+})();
+</script>
+</body>
+</html>
